@@ -1,5 +1,5 @@
 /*
-See LICENSE folder for this sample’s licensing information.
+See the LICENSE.txt file for this sample’s licensing information.
 
 Abstract:
 Implementation of a platform independent renderer class, which performs Metal setup and per frame rendering

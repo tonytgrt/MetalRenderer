@@ -20,7 +20,7 @@ An `MTKView` needs a reference to a Metal device object in order to create resou
 _view.device = MTLCreateSystemDefaultDevice();
 ```
 
-Other properties on `MTKView` allow you to control its behavior. To erase the contents of the view to a solid background color, you set its [`clearColor`](https://developer.apple.com/documentation/metalkit/mtkview/1536036-clearcolor) property. You create the color using the [`MTLClearColorMake`](https://developer.apple.com/documentation/metal/1437971-mtlclearcolormake) function, specifying the red, green, blue, and alpha values.
+Other properties on `MTKView` allow you to control its behavior. To erase the contents of the view to a solid background color, you set its [`clearColor`](https://developer.apple.com/documentation/metalkit/mtkview/1536036-clearcolor) property. You create the color using the [`MTLClearColorMake`](https://developer.apple.com/documentation/metal/mtlclearcolormake(_:_:_:_:)) function, specifying the red, green, blue, and alpha values.
 
 ``` objective-c
 _view.clearColor = MTLClearColorMake(0.0, 0.5, 1.0, 1.0);
@@ -76,7 +76,7 @@ Because a view's render pass descriptor might be `nil`, you should test to make 
 
 ## Create a Render Pass
 
-You create the render pass by encoding it into the command buffer using a  [`MTLRenderCommandEncoder`][MTLRenderCommandEncoder] object. Call the command buffer's [`renderCommandEncoderWithDescriptor:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1442999-rendercommandencoderwithdescript) method and pass in the render pass descriptor.
+You create the render pass by encoding it into the command buffer using a  [`MTLRenderCommandEncoder`][MTLRenderCommandEncoder] object. Call the command buffer's [`renderCommandEncoderWithDescriptor:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/makerendercommandencoder(descriptor:)) method and pass in the render pass descriptor.
 
 ``` objective-c
 id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
@@ -98,7 +98,7 @@ Drawing to a texture doesn't automatically display the new contents onscreen. In
 id<MTLDrawable> drawable = view.currentDrawable;
 ```
 
-Call the [`presentDrawable:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443029-presentdrawable) method on the command buffer, passing in the drawable.
+Call the [`presentDrawable:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/present(_:)-3fi7o) method on the command buffer, passing in the drawable.
 
 ``` objective-c
 [commandBuffer presentDrawable:drawable];
