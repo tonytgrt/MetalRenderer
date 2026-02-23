@@ -7,17 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3A58E28C222F7ECD00072892 /* AAPLRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.m */; };
-		3A58E28D222F7ECD00072892 /* AAPLRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.m */; };
-		3A58E28E222F7ECD00072892 /* AAPLRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.m */; };
-		3A58E28F222F7F1400072892 /* AAPLViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.m */; };
-		3A58E290222F7F1400072892 /* AAPLViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.m */; };
-		3A58E291222F7F1500072892 /* AAPLViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.m */; };
+		3A58E28C222F7ECD00072892 /* AAPLRenderer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */; };
+		3A58E28D222F7ECD00072892 /* AAPLRenderer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */; };
+		3A58E28E222F7ECD00072892 /* AAPLRenderer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */; };
+		3A58E28F222F7F1400072892 /* AAPLViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.mm */; };
+		3A58E290222F7F1400072892 /* AAPLViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.mm */; };
+		3A58E291222F7F1500072892 /* AAPLViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E289222F7D9900072892 /* AAPLViewController.mm */; };
 		3A58E292222F7F1700072892 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E287222F7D9900072892 /* main.m */; };
 		3A58E293222F7F1800072892 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E287222F7D9900072892 /* main.m */; };
 		3A58E294222F7F1800072892 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E287222F7D9900072892 /* main.m */; };
-		3A58E295222F7F1E00072892 /* AAPLAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E27B222F7D9900072892 /* AAPLAppDelegate.m */; };
-		3A58E297222F7F2100072892 /* AAPLAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E27B222F7D9900072892 /* AAPLAppDelegate.m */; };
+		3A58E295222F7F1E00072892 /* AAPLAppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E27B222F7D9900072892 /* AAPLAppDelegate.mm */; };
+		3A58E297222F7F2100072892 /* AAPLAppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A58E27B222F7D9900072892 /* AAPLAppDelegate.mm */; };
 		3A58E298222F7F2F00072892 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 3A58E27E222F7D9900072892 /* LaunchScreen.storyboard */; };
 		3A58E299222F7F2F00072892 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 3A58E280222F7D9900072892 /* Main.storyboard */; };
 		3A58E29A222F7F3800072892 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 3A58E284222F7D9900072892 /* Main.storyboard */; };
@@ -31,7 +31,7 @@
 /* Begin PBXFileReference section */
 		3A58E279222F7D9900072892 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		3A58E27A222F7D9900072892 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		3A58E27B222F7D9900072892 /* AAPLAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AAPLAppDelegate.m; sourceTree = "<group>"; };
+		3A58E27B222F7D9900072892 /* AAPLAppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AAPLAppDelegate.mm; sourceTree = "<group>"; };
 		3A58E27C222F7D9900072892 /* AAPLViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AAPLViewController.h; sourceTree = "<group>"; };
 		3A58E27F222F7D9900072892 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		3A58E281222F7D9900072892 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -40,9 +40,9 @@
 		3A58E286222F7D9900072892 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3A58E287222F7D9900072892 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		3A58E288222F7D9900072892 /* AAPLAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AAPLAppDelegate.h; sourceTree = "<group>"; };
-		3A58E289222F7D9900072892 /* AAPLViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AAPLViewController.m; sourceTree = "<group>"; };
+		3A58E289222F7D9900072892 /* AAPLViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AAPLViewController.mm; sourceTree = "<group>"; };
 		3A58E28A222F7ECD00072892 /* AAPLRenderer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AAPLRenderer.h; sourceTree = "<group>"; };
-		3A58E28B222F7ECD00072892 /* AAPLRenderer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AAPLRenderer.m; sourceTree = "<group>"; };
+		3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = AAPLRenderer.mm; sourceTree = "<group>"; };
 		83E9F98621ED168D00B393C1 /* MetalKitAndRenderingSetup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MetalKitAndRenderingSetup.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		83E9F99E21ED16D900B393C1 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		83E9F99F21ED16D900B393C1 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
@@ -96,9 +96,9 @@
 			isa = PBXGroup;
 			children = (
 				3A58E288222F7D9900072892 /* AAPLAppDelegate.h */,
-				3A58E27B222F7D9900072892 /* AAPLAppDelegate.m */,
+				3A58E27B222F7D9900072892 /* AAPLAppDelegate.mm */,
 				3A58E27C222F7D9900072892 /* AAPLViewController.h */,
-				3A58E289222F7D9900072892 /* AAPLViewController.m */,
+				3A58E289222F7D9900072892 /* AAPLViewController.mm */,
 				3A58E287222F7D9900072892 /* main.m */,
 				3A58E283222F7D9900072892 /* tvOS */,
 				3A58E277222F7D9900072892 /* macOS */,
@@ -182,7 +182,7 @@
 			isa = PBXGroup;
 			children = (
 				3A58E28A222F7ECD00072892 /* AAPLRenderer.h */,
-				3A58E28B222F7ECD00072892 /* AAPLRenderer.m */,
+				3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */,
 			);
 			path = Renderer;
 			sourceTree = "<group>";
@@ -319,9 +319,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3A58E28F222F7F1400072892 /* AAPLViewController.m in Sources */,
+				3A58E28F222F7F1400072892 /* AAPLViewController.mm in Sources */,
 				3A58E292222F7F1700072892 /* main.m in Sources */,
-				3A58E28C222F7ECD00072892 /* AAPLRenderer.m in Sources */,
+				3A58E28C222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,10 +329,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3A58E290222F7F1400072892 /* AAPLViewController.m in Sources */,
+				3A58E290222F7F1400072892 /* AAPLViewController.mm in Sources */,
 				3A58E293222F7F1800072892 /* main.m in Sources */,
-				3A58E295222F7F1E00072892 /* AAPLAppDelegate.m in Sources */,
-				3A58E28D222F7ECD00072892 /* AAPLRenderer.m in Sources */,
+				3A58E295222F7F1E00072892 /* AAPLAppDelegate.mm in Sources */,
+				3A58E28D222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,10 +340,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3A58E291222F7F1500072892 /* AAPLViewController.m in Sources */,
+				3A58E291222F7F1500072892 /* AAPLViewController.mm in Sources */,
 				3A58E294222F7F1800072892 /* main.m in Sources */,
-				3A58E297222F7F2100072892 /* AAPLAppDelegate.m in Sources */,
-				3A58E28E222F7ECD00072892 /* AAPLRenderer.m in Sources */,
+				3A58E297222F7F2100072892 /* AAPLAppDelegate.mm in Sources */,
+				3A58E28E222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

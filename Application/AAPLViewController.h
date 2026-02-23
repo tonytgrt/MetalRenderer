@@ -6,14 +6,14 @@ Header for the cross-platform view controller.
 */
 
 #if defined(TARGET_IOS) || defined(TARGET_TVOS)
-@import UIKit;
+#import <UIKit/UIKit.h>
 #define PlatformViewController UIViewController
 #else
-@import AppKit;
+#import <AppKit/AppKit.h>
 #define PlatformViewController NSViewController
 #endif
 
-@import MetalKit;
+#import <MetalKit/MetalKit.h>
 
 #import "AAPLRenderer.h"
 

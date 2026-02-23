@@ -5,8 +5,8 @@ Abstract:
 Implementation of a platform independent renderer class, which performs Metal setup and per frame rendering
 */
 
-@import simd;
-@import MetalKit;
+#import <simd/simd.h>
+#import <MetalKit/MetalKit.h>
 
 #import "AAPLRenderer.h"
 
