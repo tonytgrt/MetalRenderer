@@ -1,21 +1,120 @@
-# See LICENSE folder for this sample’s licensing information.
-#
-# Apple sample code gitignore configuration.
-
-# Finder
+# =============================================================================
+# macOS
+# =============================================================================
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
 
-# Xcode - User files
+# =============================================================================
+# Xcode
+# =============================================================================
+
+# User-specific settings
 xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
 
+# Xcode workspace auto-generated files
 **/*.xcodeproj/project.xcworkspace/*
 !**/*.xcodeproj/project.xcworkspace/xcshareddata
-
 **/*.xcodeproj/project.xcworkspace/xcshareddata/*
 !**/*.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 
+# Playground workspace
 **/*.playground/playground.xcworkspace/*
 !**/*.playground/playground.xcworkspace/xcshareddata
-
 **/*.playground/playground.xcworkspace/xcshareddata/*
 !**/*.playground/playground.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+
+# Build output
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Archives
+*.xcarchive
+
+# Fastlane (if you ever use it)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# =============================================================================
+# Metal / GPU Shaders
+# =============================================================================
+
+# Compiled Metal libraries (generated at build time)
+*.metallib
+*.air
+
+# Metal shader debug symbols
+*.metallibsym
+
+# =============================================================================
+# Swift Package Manager
+# =============================================================================
+.build/
+.swiftpm/
+*.resolved
+
+# =============================================================================
+# CocoaPods (if used)
+# =============================================================================
+Pods/
+Podfile.lock
+
+# =============================================================================
+# Carthage (if used)
+# =============================================================================
+Carthage/Build/
+
+# =============================================================================
+# C / C++ 
+# =============================================================================
+*.o
+*.a
+*.so
+*.dylib
+*.out
+*.exe
+
+# =============================================================================
+# CMake 
+# =============================================================================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# =============================================================================
+# Editor / IDE
+# =============================================================================
+
+# VSCode
+.vscode/
+
+# JetBrains (AppCode, CLion)
+.idea/
+*.iml
+
+# Vim/Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# =============================================================================
+# Misc
+# =============================================================================
+*.log
+*.tmp
+*.bak
