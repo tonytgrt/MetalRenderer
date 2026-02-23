@@ -11,4 +11,6 @@ Header for a platform independent renderer class, which performs Metal setup and
 
 - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView;
 
+- (void)loadBackgroundFromURL:(nonnull NSURL *)url;
+
 @end

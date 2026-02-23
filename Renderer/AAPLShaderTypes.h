@@ -20,3 +20,17 @@ typedef struct {
     simd_float4 color;
 } AAPLVertex;
 
+typedef enum AAPLBgVertexInputIndex
+{
+    AAPLBgVertexInputIndexVertices = 0,
+} AAPLBgVertexInputIndex;
+
+typedef enum AAPLBgTextureIndex
+{
+    AAPLBgTextureIndexBackground = 0,
+} AAPLBgTextureIndex;
+
+typedef struct {
+    simd_float2 position;
+    simd_float2 texCoord;
+} AAPLTexturedVertex;

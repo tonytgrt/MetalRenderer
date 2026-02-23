@@ -3,14 +3,22 @@
 #import <MetalKit/MetalKit.h>
 
 #import "AAPLRenderer.h"
-#import "AAPLShaderTypes.h"   // shared C++ struct
+#import "AAPLShaderTypes.h"
 
 @implementation AAPLRenderer
 {
     id<MTLDevice>              _device;
     id<MTLCommandQueue>        _commandQueue;
-    id<MTLRenderPipelineState> _pipelineState;   // compiled shader pair + fixed state
-    id<MTLBuffer>              _vertexBuffer;    // GPU-visible triangle data
+
+    // ── Coloured triangle ─────────────────────────────────────────────────────
+    id<MTLRenderPipelineState> _pipelineState;
+    id<MTLBuffer>              _vertexBuffer;
+
+    // ── Background quad ───────────────────────────────────────────────────────
+    id<MTLRenderPipelineState> _backgroundPipelineState;
+    id<MTLBuffer>              _quadVertexBuffer;
+    id<MTLTexture>             _backgroundTexture;   // nil until user picks a file
+    id<MTLSamplerState>        _samplerState;
 }
 
 
@@ -22,65 +30,153 @@
     _device       = mtkView.device;
     _commandQueue = [_device newCommandQueue];
 
-    // ── 1. Vertex data (pure C++) ─────────────────────────────────────────────
-    //
-    // Positions in NDC.  Metal NDC:  X -1 (left)  … +1 (right)
-    //                                Y -1 (bottom) … +1 (top)     (same as OpenGL)
-    //                                Z  0 (near)   …  1 (far)     (different: GL uses -1…1)
-    //
-    // C++ aggregate initialisation of a plain struct array — no ObjC here.
+    [self _buildTrianglePipelineWithView:mtkView];
+    [self _buildBackgroundPipelineWithView:mtkView];
+    [self _buildSamplerState];
+
+    return self;
+}
+
+
+// ── Triangle pipeline (same as the triangle guide) ────────────────────────────
+
+- (void)_buildTrianglePipelineWithView:(MTKView *)mtkView
+{
     static const AAPLVertex triangleVertices[] =
     {
-    //   position (NDC)       color (RGBA)
-        { { 0.0f,  0.5f },  { 1.0f, 0.0f, 0.0f, 1.0f } },   // top    — red
-        { {-0.5f, -0.5f },  { 0.0f, 1.0f, 0.0f, 1.0f } },   // left   — green
-        { { 0.5f, -0.5f },  { 0.0f, 0.0f, 1.0f, 1.0f } },   // right  — blue
+        { { 0.0f,  0.5f },  { 1.0f, 0.0f, 0.0f, 1.0f } },
+        { {-0.5f, -0.5f },  { 0.0f, 1.0f, 0.0f, 1.0f } },
+        { { 0.5f, -0.5f },  { 0.0f, 0.0f, 1.0f, 1.0f } },
     };
 
-    // Upload vertices to a MTLBuffer.
-    // MTLStorageModeShared = CPU-writable and GPU-readable (like a GL_DYNAMIC_DRAW VBO
-    // or a Vulkan HOST_VISIBLE | HOST_COHERENT buffer).
-    // For static geometry, MTLStorageModeManaged (macOS) or a blit to a private buffer
-    // is more efficient, but Shared is fine for learning.
     _vertexBuffer = [_device newBufferWithBytes:triangleVertices
                                          length:sizeof(triangleVertices)
                                         options:MTLResourceStorageModeShared];
 
-    // ── 2. Load shaders from the default Metal library ────────────────────────
+    id<MTLLibrary>  lib  = [_device newDefaultLibrary];
+    NSError        *err  = nil;
+
+    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.label                              = @"Triangle Pipeline";
+    desc.vertexFunction                     = [lib newFunctionWithName:@"vertexShader"];
+    desc.fragmentFunction                   = [lib newFunctionWithName:@"fragmentShader"];
+    desc.colorAttachments[0].pixelFormat    = mtkView.colorPixelFormat;
+
+    _pipelineState = [_device newRenderPipelineStateWithDescriptor:desc error:&err];
+    if (!_pipelineState) { NSLog(@"Triangle PSO error: %@", err); }
+}
+
+
+// ── Background pipeline ───────────────────────────────────────────────────────
+
+- (void)_buildBackgroundPipelineWithView:(MTKView *)mtkView
+{
+    // Full-screen quad as a triangle strip (4 vertices, 2 triangles).
     //
-    // Xcode compiles all .metal files in the target into a single
-    // default.metallib at build time (analogous to linking SPIR-V modules).
-    // newDefaultLibrary loads that binary.
-    NSError *error = nil;
-    id<MTLLibrary> defaultLibrary = [_device newDefaultLibrary];
-
-    id<MTLFunction> vertexFunction   = [defaultLibrary newFunctionWithName:@"vertexShader"];
-    id<MTLFunction> fragmentFunction = [defaultLibrary newFunctionWithName:@"fragmentShader"];
-
-    // ── 3. Build the render pipeline state ───────────────────────────────────
+    // Triangle strip winding:  v0─v1
+    //                           │╲  │
+    //                          v2─v3
     //
-    // MTLRenderPipelineDescriptor is the Metal equivalent of VkGraphicsPipelineCreateInfo
-    // or the combination of glLinkProgram + glEnable/glBlend/etc. in OpenGL.
-    // It is compiled once and cached; switching pipelines at draw time is cheap.
-    MTLRenderPipelineDescriptor *pipelineDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
-    pipelineDescriptor.label                = @"Triangle Pipeline";
-    pipelineDescriptor.vertexFunction       = vertexFunction;
-    pipelineDescriptor.fragmentFunction     = fragmentFunction;
-
-    // The PSO must know the pixel format of the render target it will write to.
-    // MTKView exposes this as colorPixelFormat — it matches the drawable texture format.
-    // If this does not match the actual attachment format at draw time, Metal will
-    // raise a validation error (similar to a Vulkan render pass compatibility error).
-    pipelineDescriptor.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat;
-
-    _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipelineDescriptor
-                                                             error:&error];
-    if (!_pipelineState)
+    // Strip order: v0, v1, v2 → triangle 1
+    //              v1, v2, v3 → triangle 2  (Metal re-uses last 2 vertices)
+    //
+    // NDC position     UV
+    static const AAPLTexturedVertex quadVertices[] =
     {
-        NSLog(@"Failed to create pipeline state: %@", error);
-    }
+        { {-1.0f,  1.0f},  {0.0f, 0.0f} },   // v0  top-left
+        { { 1.0f,  1.0f},  {1.0f, 0.0f} },   // v1  top-right
+        { {-1.0f, -1.0f},  {0.0f, 1.0f} },   // v2  bottom-left
+        { { 1.0f, -1.0f},  {1.0f, 1.0f} },   // v3  bottom-right
+    };
 
-    return self;
+    _quadVertexBuffer = [_device newBufferWithBytes:quadVertices
+                                             length:sizeof(quadVertices)
+                                            options:MTLResourceStorageModeShared];
+
+    id<MTLLibrary>  lib = [_device newDefaultLibrary];
+    NSError        *err = nil;
+
+    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.label              = @"Background Pipeline";
+    desc.vertexFunction     = [lib newFunctionWithName:@"backgroundVertex"];
+    desc.fragmentFunction   = [lib newFunctionWithName:@"backgroundFragment"];
+    desc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat;
+
+    _backgroundPipelineState = [_device newRenderPipelineStateWithDescriptor:desc
+                                                                       error:&err];
+    if (!_backgroundPipelineState) { NSLog(@"Background PSO error: %@", err); }
+}
+
+
+// ── Sampler state ─────────────────────────────────────────────────────────────
+//
+// MTLSamplerState is the Metal equivalent of:
+//   OpenGL:  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR) etc.
+//   Vulkan:  VkSamplerCreateInfo → vkCreateSampler
+//
+// Created once, reused every frame.
+
+- (void)_buildSamplerState
+{
+    MTLSamplerDescriptor *desc = [[MTLSamplerDescriptor alloc] init];
+
+    // Linear filtering: smooth interpolation between texels.
+    // Use MTLSamplerMinMagFilterNearest for a pixelated / retro look.
+    desc.minFilter = MTLSamplerMinMagFilterLinear;
+    desc.magFilter = MTLSamplerMinMagFilterLinear;
+
+    // ClampToEdge: pixels outside [0,1] UV get the edge colour.
+    // Equivalent to GL_CLAMP_TO_EDGE / VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE.
+    desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
+    desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+
+    _samplerState = [_device newSamplerStateWithDescriptor:desc];
+}
+
+
+// ── Public: load image from file ──────────────────────────────────────────────
+
+- (void)loadBackgroundFromURL:(nonnull NSURL *)url
+{
+    // MTKTextureLoader is the high-level path for loading images into MTLTexture.
+    // It handles PNG, JPEG, HEIC, TIFF, and any format NSImage/CGImage can decode.
+    // The low-level path (manual CGImage decode + MTLTexture blit) is only needed
+    // when you need fine-grained control over formats or mip generation.
+    MTKTextureLoader *loader = [[MTKTextureLoader alloc] initWithDevice:_device];
+
+    NSDictionary *options = @{
+        // Generate no mipmaps — background is drawn at full screen size so
+        // minification mipmaps are wasted memory here.
+        MTKTextureLoaderOptionGenerateMipmaps : @(NO),
+
+        // SRGB = NO: load raw pixel values, no gamma correction applied by the
+        // loader.  Set to YES if you want the loader to tag the texture as sRGB
+        // so the GPU converts to linear on reads (correct for colour-managed apps).
+        MTKTextureLoaderOptionSRGB : @(NO),
+
+        // TextureUsage: ShaderRead is sufficient — we only sample, never write.
+        MTKTextureLoaderOptionTextureUsage :
+            @(MTLTextureUsageShaderRead),
+
+        // StorageMode: Private places the texture in GPU-only memory (fastest
+        // read).  The loader handles the CPU→GPU upload internally via a blit.
+        // Equivalent to a Vulkan DEVICE_LOCAL image after a staging upload.
+        MTKTextureLoaderOptionTextureStorageMode :
+            @(MTLStorageModePrivate),
+    };
+
+    NSError *error = nil;
+    id<MTLTexture> tex = [loader newTextureWithContentsOfURL:url
+                                                     options:options
+                                                       error:&error];
+    if (tex)
+    {
+        _backgroundTexture = tex;
+    }
+    else
+    {
+        NSLog(@"Failed to load background texture: %@", error);
+    }
 }
 
 
@@ -88,45 +184,55 @@
 
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
-    MTLRenderPassDescriptor *renderPassDescriptor = view.currentRenderPassDescriptor;
-    if (renderPassDescriptor == nil) { return; }
+    MTLRenderPassDescriptor *rpd = view.currentRenderPassDescriptor;
+    if (rpd == nil) { return; }
 
-    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+    id<MTLCommandBuffer>        cmd     = [_commandQueue commandBuffer];
+    id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:rpd];
 
-    // A MTLRenderCommandEncoder is a single render pass.
-    // In Vulkan terms: begin render pass + record draw commands + end render pass.
-    // In OpenGL terms: the implicit "draw into the current FBO" state.
-    id<MTLRenderCommandEncoder> encoder =
-        [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+    // ── Draw background (only when a texture has been loaded) ─────────────────
+    //
+    // Draw order matters: background first, then triangle on top.
+    // There is no depth test here — we rely on painter's algorithm (draw order).
+    if (_backgroundTexture != nil)
+    {
+        [encoder setRenderPipelineState:_backgroundPipelineState];
 
-    // Bind the compiled pipeline state (shaders + blend mode + pixel format).
+        // Vertex buffer — full-screen quad
+        [encoder setVertexBuffer:_quadVertexBuffer
+                          offset:0
+                         atIndex:AAPLBgVertexInputIndexVertices];
+
+        // Texture — bound to slot 0, matches [[texture(AAPLBgTextureIndexBackground)]]
+        [encoder setFragmentTexture:_backgroundTexture
+                            atIndex:AAPLBgTextureIndexBackground];
+
+        // Sampler — bound to slot 0, matches [[sampler(0)]]
+        [encoder setFragmentSamplerState:_samplerState
+                                 atIndex:0];
+
+        // Triangle strip: 4 vertices → 2 triangles → full-screen quad
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                    vertexStart:0
+                    vertexCount:4];
+    }
+
+    // ── Draw coloured triangle (on top of background) ─────────────────────────
     [encoder setRenderPipelineState:_pipelineState];
-
-    // Bind the vertex buffer to slot 0 — matches [[buffer(AAPLVertexInputIndexVertices)]]
-    // in the vertex shader.  Offset 0 = start from the beginning of the buffer.
-    // In OpenGL terms: glBindBuffer + glVertexAttribPointer.
-    // In Vulkan terms: vkCmdBindVertexBuffers.
     [encoder setVertexBuffer:_vertexBuffer
                       offset:0
                      atIndex:AAPLVertexInputIndexVertices];
-
-    // Issue the draw call.
-    // MTLPrimitiveTypeTriangle = one triangle per 3 vertices (GL_TRIANGLES).
-    // vertexStart:0 vertexCount:3 = draw vertices 0, 1, 2.
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle
                 vertexStart:0
                 vertexCount:3];
 
     [encoder endEncoding];
 
-    [commandBuffer presentDrawable:view.currentDrawable];
-    [commandBuffer commit];
+    [cmd presentDrawable:view.currentDrawable];
+    [cmd commit];
 }
 
 
-- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
-{
-    // No projection matrix yet — vertices are already in NDC.
-}
+- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size {}
 
 @end
