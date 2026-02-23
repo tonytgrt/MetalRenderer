@@ -43,26 +43,39 @@ Implementation of the cross-platform view controller.
     _view.delegate = _renderer;
     
 #if TARGET_OS_OSX
-    [self _addBackgroundButton];
+    [self _addMenuBarItem];
 #endif
     
 }
 
 #if TARGET_OS_OSX
-- (void)_addBackgroundButton
+- (void)_addMenuBarItem
 {
-    NSButton *btn = [NSButton buttonWithTitle:@"Add Background"
-    target:self
-    action:@selector(_addBackgroundPressed:)];
+    // Build a "Background" top-level menu and insert it after "Edit".
+    //
+    // [NSApp mainMenu] is the shared NSMenu that drives the entire macOS menu bar.
+    // Each top-level NSMenuItem holds a submenu; the submenu's title is what appears
+    // in the bar.  We insert one new top-level item containing a single action item.
 
-    btn.translatesAutoresizingMaskIntoConstraints = NO;
+    NSMenu *bgMenu = [[NSMenu alloc] initWithTitle:@"Background"];
 
-    [_view addSubview:btn];
+    // target:nil  →  AppKit walks the responder chain at action time to find the
+    // first object that responds to _addBackgroundPressed:.  Because
+    // AAPLViewController is the key window's content view controller it is always
+    // in the chain, so no explicit target reference is needed.
+    [bgMenu addItemWithTitle:@"Add Background…"
+                     action:@selector(_addBackgroundPressed:)
+              keyEquivalent:@""];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [btn.topAnchor     constraintEqualToAnchor:_view.topAnchor     constant:8.0],
-        [btn.leadingAnchor constraintEqualToAnchor:_view.leadingAnchor constant:8.0],
-    ]];
+    NSMenuItem *topItem = [[NSMenuItem alloc] initWithTitle:@"Background"
+                                                     action:nil
+                                              keyEquivalent:@""];
+    topItem.submenu = bgMenu;
+
+    NSMenu  *mainMenu  = [NSApp mainMenu];
+    NSInteger editIdx  = [mainMenu indexOfItemWithTitle:@"Edit"];
+    NSInteger insertAt = (editIdx >= 0) ? editIdx + 1 : mainMenu.numberOfItems;
+    [mainMenu insertItem:topItem atIndex:insertAt];
 }
 
 - (void)_addBackgroundPressed:(id)sender
