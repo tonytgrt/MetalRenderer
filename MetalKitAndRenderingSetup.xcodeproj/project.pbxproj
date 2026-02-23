@@ -26,6 +26,9 @@
 		83E9F9A121ED16D900B393C1 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 83E9F99F21ED16D900B393C1 /* MetalKit.framework */; };
 		CF2B7FCD220B9FEB002847D1 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF2B7FCB220B9FEB002847D1 /* MetalKit.framework */; };
 		CF2B7FCE220B9FEB002847D1 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF2B7FCC220B9FEB002847D1 /* Metal.framework */; };
+		D74F58742F4CF6DF00545DA5 /* Triangle.metal in Sources */ = {isa = PBXBuildFile; fileRef = D74F58732F4CF6DF00545DA5 /* Triangle.metal */; };
+		D74F58752F4CF6DF00545DA5 /* Triangle.metal in Sources */ = {isa = PBXBuildFile; fileRef = D74F58732F4CF6DF00545DA5 /* Triangle.metal */; };
+		D74F58762F4CF6DF00545DA5 /* Triangle.metal in Sources */ = {isa = PBXBuildFile; fileRef = D74F58732F4CF6DF00545DA5 /* Triangle.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +55,8 @@
 		CF2B7FD5220BA750002847D1 /* MetalKitAndRenderSetup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MetalKitAndRenderSetup.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CF7F421B23731058925FEE5E /* LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		CF87FE42220B61290011ECD1 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		D74F58732F4CF6DF00545DA5 /* Triangle.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Triangle.metal; sourceTree = "<group>"; };
+		D74F58772F4CF6EA00545DA5 /* AAPLShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AAPLShaderTypes.h; sourceTree = "<group>"; };
 		E68AA5E7D694DFFD45E38DF9 /* SampleCode.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = SampleCode.xcconfig; path = Configuration/SampleCode.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -181,6 +186,8 @@
 		CF2B7FC6220B9DC7002847D1 /* Renderer */ = {
 			isa = PBXGroup;
 			children = (
+				D74F58772F4CF6EA00545DA5 /* AAPLShaderTypes.h */,
+				D74F58732F4CF6DF00545DA5 /* Triangle.metal */,
 				3A58E28A222F7ECD00072892 /* AAPLRenderer.h */,
 				3A58E28B222F7ECD00072892 /* AAPLRenderer.mm */,
 			);
@@ -319,6 +326,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D74F58752F4CF6DF00545DA5 /* Triangle.metal in Sources */,
 				3A58E28F222F7F1400072892 /* AAPLViewController.mm in Sources */,
 				3A58E292222F7F1700072892 /* main.m in Sources */,
 				3A58E28C222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
@@ -333,6 +341,7 @@
 				3A58E293222F7F1800072892 /* main.m in Sources */,
 				3A58E295222F7F1E00072892 /* AAPLAppDelegate.mm in Sources */,
 				3A58E28D222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
+				D74F58762F4CF6DF00545DA5 /* Triangle.metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -344,6 +353,7 @@
 				3A58E294222F7F1800072892 /* main.m in Sources */,
 				3A58E297222F7F2100072892 /* AAPLAppDelegate.mm in Sources */,
 				3A58E28E222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
+				D74F58742F4CF6DF00545DA5 /* Triangle.metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
