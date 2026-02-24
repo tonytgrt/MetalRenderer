@@ -41,6 +41,7 @@ glassVertex(uint                         vertexID [[ vertex_id ]],
 fragment float4
 glassFragment(GlassRasterizerData   in        [[ stage_in ]],
               texture2d<float>      bgTexture [[ texture(AAPLBgTextureIndexBackground) ]],
+              texture2d<float>      blurTexture  [[ texture(AAPLBgTextureIndexBlur) ]],
               sampler               bgSampler [[ sampler(0) ]],
               constant float2&      viewport  [[ buffer(0) ]])   // (width, height) in pixels
 {
@@ -72,7 +73,6 @@ glassFragment(GlassRasterizerData   in        [[ stage_in ]],
     float intDist = -sdf;                               // positive inside, 0 at edge
     float lensR   = min(boxHalf.x, boxHalf.y) * 0.85;  // reference depth for t=1
     float t       = saturate(intDist / lensR);          // 0 = edge, 1 = deep inside
-    float h       = lensHeight(intDist, lensR);         // 0–1 height of convex surface
 
     // ── 5. Surface normal via finite differences ──────────────────────────────
     float eps = 0.004;
@@ -104,22 +104,10 @@ glassFragment(GlassRasterizerData   in        [[ stage_in ]],
     float4 refracted  = bgTexture.sample(bgSampler, saturate(in.texCoord + uvDistort));
 
     // ── 7. Frosted interior ───────────────────────────────────────────────────
-    // Approximate a Gaussian blur with a 3×3 weighted tap pattern.
-    // For production code, pre-blur the background in a separate pass and bind
-    // the result as a second texture.
-    float  blurR  = 0.000;   // tight blur — frosting is a haze, not a fog
-    float4 frosted = float4(0.0);
-    float  totalW  = 0.0;
-    for (int i = -1; i <= 1; i++) {
-        for (int j = -1; j <= 1; j++) {
-            float2 offset = float2(i, j) * blurR;
-            float  w      = 1.0 / (1.0 + float(i*i + j*j));
-            frosted += bgTexture.sample(bgSampler, saturate(in.texCoord + offset)) * w;
-            totalW  += w;
-        }
-    }
-    frosted /= totalW;
-    frosted  = mix(frosted, float4(1.0), 0.08);    // subtle white haze
+    // The blur texture contains a full two-pass Gaussian of the background.
+    // No UV distortion here: frost is about diffusion, not refraction.
+    float4 frosted = blurTexture.sample(bgSampler, in.texCoord);
+    frosted        = mix(frosted, float4(1.0), 0.08);
 
     // ── 8. Fresnel (Schlick) ──────────────────────────────────────────────────
     // F(θ) = F₀ + (1–F₀)(1–cosθ)⁵,  F₀ ≈ 0.04 for glass in air.
@@ -132,7 +120,7 @@ glassFragment(GlassRasterizerData   in        [[ stage_in ]],
                   (1.0 - smoothstep(rimW * 0.3, rimW * 1.5, intDist));
 
     // ── 10. Edge glow ─────────────────────────────────────────────────────────
-    float edgeGlow = (1.0 - smoothstep(0.0, 0.04, intDist)) * 0.22;
+    float edgeGlow = (1.0 - smoothstep(0.0, 0.04, intDist)) * 0.022;
 
     // ── 11. Caustic at centre ─────────────────────────────────────────────────
     // A convex lens focuses light toward the centre — subtle brightness boost.

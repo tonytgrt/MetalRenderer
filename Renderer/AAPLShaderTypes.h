@@ -28,6 +28,7 @@ typedef enum AAPLBgVertexInputIndex
 typedef enum AAPLBgTextureIndex
 {
     AAPLBgTextureIndexBackground = 0,
+    AAPLBgTextureIndexBlur       = 1,
 } AAPLBgTextureIndex;
 
 typedef struct {

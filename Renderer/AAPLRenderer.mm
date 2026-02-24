@@ -22,6 +22,33 @@
 
     // ── Per-frame state ───────────────────────────────────────────────────────
     simd_float2                _viewportSize;
+
+    // Two off-screen textures for the H→V blur chain
+    id<MTLTexture>              _blurIntermediate;   // H-pass output / V-pass input
+    id<MTLTexture>              _blurTexture;         // final blurred result bound to glass
+
+    id<MTLRenderPipelineState>  _blurPipelineState;
+
+    float                       _blurSigma;           // set once; change for tuning
+    bool                        _blurDirty;           // re-blur only when image changes
+}
+
+- (void)_buildBlurPipelineWithView:(MTKView *)view
+{
+    id<MTLLibrary> lib = [_device newDefaultLibrary];
+
+    MTLRenderPipelineDescriptor *desc = [MTLRenderPipelineDescriptor new];
+    desc.label                        = @"Gaussian Blur";
+    desc.vertexFunction               = [lib newFunctionWithName:@"blurVertex"];
+    desc.fragmentFunction             = [lib newFunctionWithName:@"gaussianBlurFragment"];
+
+    // Off-screen target — match the background texture pixel format.
+    // MTLPixelFormatBGRA8Unorm is a safe default; use RGBA16Float if HDR.
+    desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+    NSError *err;
+    _blurPipelineState = [_device newRenderPipelineStateWithDescriptor:desc error:&err];
+    NSAssert(_blurPipelineState, @"Blur pipeline: %@", err);
 }
 
 
@@ -40,6 +67,10 @@
     [self _buildBackgroundPipelineWithView:mtkView];
     [self _buildGlassPipelineWithView:mtkView];
     [self _buildDefaultTexture];
+    [self _buildBlurPipelineWithView:mtkView];
+    _blurSigma = 20.0f;   // Dock-like starting point
+    _blurDirty = false;
+    [self _rebuildBlurTexturesWithSize:mtkView.drawableSize];
 
     return self;
 }
@@ -135,7 +166,6 @@
     _defaultTexture = [_device newTextureWithDescriptor:desc];
 
     uint8_t white[4] = {255, 255, 255, 255};
-    uint8_t clr[4] = {0x1f, 0x1e, 0x33, 0xff};
     [_defaultTexture replaceRegion:MTLRegionMake2D(0, 0, 1, 1)
                        mipmapLevel:0
                          withBytes:white
@@ -161,8 +191,54 @@
                                                        error:&error];
     if (tex)  { _backgroundTexture = tex; }
     else      { NSLog(@"Texture load failed: %@", error); }
+    _blurDirty = true;
 }
 
+- (void)_encodeBlurPassesWithCommandBuffer:(id<MTLCommandBuffer>)cmdBuf
+                                   texture:(id<MTLTexture>)source
+{
+    float sigma    = _blurSigma;
+    float stepH[2] = { 1.0f / (float)source.width,  0.0f };
+    float stepV[2] = { 0.0f, 1.0f / (float)source.height };
+
+    // Pass 1: horizontal  (source → _blurIntermediate)
+    {
+        MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor new];
+        rpd.colorAttachments[0].texture     = _blurIntermediate;
+        rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+        id<MTLRenderCommandEncoder> enc = [cmdBuf renderCommandEncoderWithDescriptor:rpd];
+        enc.label = @"BlurH";
+        [enc setRenderPipelineState:_blurPipelineState];
+        [enc setVertexBuffer:_quadVertexBuffer offset:0 atIndex:AAPLBgVertexInputIndexVertices];
+        [enc setFragmentTexture:source atIndex:0];
+        [enc setFragmentSamplerState:_samplerState atIndex:0];
+        [enc setFragmentBytes:stepH  length:sizeof(float) * 2 atIndex:0];
+        [enc setFragmentBytes:&sigma length:sizeof(float)     atIndex:1];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+        [enc endEncoding];
+    }
+
+    // Pass 2: vertical    (_blurIntermediate → _blurTexture)
+    {
+        MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor new];
+        rpd.colorAttachments[0].texture     = _blurTexture;
+        rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+        id<MTLRenderCommandEncoder> enc = [cmdBuf renderCommandEncoderWithDescriptor:rpd];
+        enc.label = @"BlurV";
+        [enc setRenderPipelineState:_blurPipelineState];
+        [enc setVertexBuffer:_quadVertexBuffer offset:0 atIndex:AAPLBgVertexInputIndexVertices];
+        [enc setFragmentTexture:_blurIntermediate atIndex:0];
+        [enc setFragmentSamplerState:_samplerState atIndex:0];
+        [enc setFragmentBytes:stepV  length:sizeof(float) * 2 atIndex:0];
+        [enc setFragmentBytes:&sigma length:sizeof(float)     atIndex:1];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+        [enc endEncoding];
+    }
+}
 
 // ── Per-frame rendering ───────────────────────────────────────────────────────
 
@@ -171,10 +247,20 @@
     MTLRenderPassDescriptor *rpd = view.currentRenderPassDescriptor;
     if (rpd == nil) { return; }
 
-    id<MTLCommandBuffer>        cmd     = [_commandQueue commandBuffer];
+    id<MTLCommandBuffer> cmd = [_commandQueue commandBuffer];
+
+    // ── Off-screen blur passes (only when image changes) ─────────────────────
+    // Must run before the on-screen encoder so the blur textures are ready.
+    if (_blurDirty && _backgroundTexture)
+    {
+        [self _encodeBlurPassesWithCommandBuffer:cmd texture:_backgroundTexture];
+        _blurDirty = false;
+    }
+
+    // ── On-screen render pass ─────────────────────────────────────────────────
     id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:rpd];
 
-    // ── Pass 1: background ────────────────────────────────────────────────────
+    // ── Sub-pass 1: background ────────────────────────────────────────────────
     if (_backgroundTexture != nil)
     {
         [encoder setRenderPipelineState:_backgroundPipelineState];
@@ -187,23 +273,19 @@
                     vertexStart:0 vertexCount:4];
     }
 
-    // ── Pass 2: liquid glass ──────────────────────────────────────────────────
-    // Use the real background texture if loaded; fall back to 1×1 white.
-    id<MTLTexture> glassSource = _backgroundTexture ?: _defaultTexture;
+    // ── Sub-pass 2: liquid glass ──────────────────────────────────────────────
+    id<MTLTexture> bgTex        = _backgroundTexture ?: _defaultTexture;
+    id<MTLTexture> glassFrostTex = _blurTexture ?: _defaultTexture;
 
     [encoder setRenderPipelineState:_glassPipelineState];
     [encoder setVertexBuffer:_quadVertexBuffer offset:0
                      atIndex:AAPLBgVertexInputIndexVertices];
-    [encoder setFragmentTexture:glassSource atIndex:AAPLBgTextureIndexBackground];
+    [encoder setFragmentTexture:bgTex         atIndex:AAPLBgTextureIndexBackground];
+    [encoder setFragmentTexture:glassFrostTex atIndex:AAPLBgTextureIndexBlur];
     [encoder setFragmentSamplerState:_samplerState atIndex:0];
-
-    // Pass viewport size as an inline constant (Vulkan equivalent: push constant).
-    // The glass fragment shader uses this to convert pixel coordinates to NDC
-    // and to correct for the window aspect ratio.
     [encoder setFragmentBytes:&_viewportSize
                        length:sizeof(_viewportSize)
                       atIndex:0];
-
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0 vertexCount:4];
 
@@ -212,10 +294,32 @@
     [cmd commit];
 }
 
+- (void)_rebuildBlurTexturesWithSize:(CGSize)size
+{
+    MTLTextureDescriptor *desc =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                           width:(NSUInteger)size.width
+                                                          height:(NSUInteger)size.height
+                                                       mipmapped:NO];
+
+    // Both textures are render targets (written by a blur pass) and
+    // shader resources (read by the next pass / glass fragment shader).
+    desc.usage        = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    desc.storageMode  = MTLStorageModePrivate;   // GPU-only; fastest
+
+    _blurIntermediate = [_device newTextureWithDescriptor:desc];
+    _blurTexture      = [_device newTextureWithDescriptor:desc];
+
+    _blurIntermediate.label = @"BlurIntermediate";
+    _blurTexture.label      = @"BlurOutput";
+
+    _blurDirty = true;   // force a re-blur with the new size
+}
 
 - (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
 {
     _viewportSize = simd_make_float2((float)size.width, (float)size.height);
+    [self _rebuildBlurTexturesWithSize:size];
 }
 
 @end
