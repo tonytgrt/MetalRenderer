@@ -26,7 +26,7 @@ Implementation of the cross-platform view controller.
     
     _view.device = MTLCreateSystemDefaultDevice();
     
-    _view.clearColor = MTLClearColorMake(1.0, 1.0, 1.0, 1.0);
+    _view.clearColor = MTLClearColorMake(0, 0, 0, 1.0);
 
     _renderer = [[AAPLRenderer alloc] initWithMetalKitView:_view];
 

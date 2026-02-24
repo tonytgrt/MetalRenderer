@@ -10,15 +10,18 @@
     id<MTLDevice>              _device;
     id<MTLCommandQueue>        _commandQueue;
 
-    // ── Coloured triangle ─────────────────────────────────────────────────────
-    id<MTLRenderPipelineState> _pipelineState;
-    id<MTLBuffer>              _vertexBuffer;
-
-    // ── Background quad ───────────────────────────────────────────────────────
+    // ── Background ────────────────────────────────────────────────────────────
     id<MTLRenderPipelineState> _backgroundPipelineState;
-    id<MTLBuffer>              _quadVertexBuffer;
-    id<MTLTexture>             _backgroundTexture;   // nil until user picks a file
+    id<MTLBuffer>              _quadVertexBuffer;   // shared by bg and glass
+    id<MTLTexture>             _backgroundTexture;  // nil until user loads an image
     id<MTLSamplerState>        _samplerState;
+
+    // ── Liquid glass ──────────────────────────────────────────────────────────
+    id<MTLRenderPipelineState> _glassPipelineState;
+    id<MTLTexture>             _defaultTexture;     // 1×1 white fallback
+
+    // ── Per-frame state ───────────────────────────────────────────────────────
+    simd_float2                _viewportSize;
 }
 
 
@@ -27,43 +30,49 @@
     self = [super init];
     if (!self) { return self; }
 
-    _device       = mtkView.device;
-    _commandQueue = [_device newCommandQueue];
+    _device            = mtkView.device;
+    _commandQueue      = [_device newCommandQueue];
+    _viewportSize      = simd_make_float2(mtkView.drawableSize.width,
+                                          mtkView.drawableSize.height);
 
-    [self _buildTrianglePipelineWithView:mtkView];
-    [self _buildBackgroundPipelineWithView:mtkView];
+    [self _buildQuadBuffer];
     [self _buildSamplerState];
+    [self _buildBackgroundPipelineWithView:mtkView];
+    [self _buildGlassPipelineWithView:mtkView];
+    [self _buildDefaultTexture];
 
     return self;
 }
 
 
-// ── Triangle pipeline (same as the triangle guide) ────────────────────────────
+// ── Shared geometry: full-screen quad (triangle strip) ────────────────────────
 
-- (void)_buildTrianglePipelineWithView:(MTKView *)mtkView
+- (void)_buildQuadBuffer
 {
-    static const AAPLVertex triangleVertices[] =
+    static const AAPLTexturedVertex quadVertices[] =
     {
-        { { 0.0f,  0.5f },  { 1.0f, 0.0f, 0.0f, 1.0f } },
-        { {-0.5f, -0.5f },  { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { 0.5f, -0.5f },  { 0.0f, 0.0f, 1.0f, 1.0f } },
+        { {-1.0f,  1.0f}, {0.0f, 0.0f} },  // top-left
+        { { 1.0f,  1.0f}, {1.0f, 0.0f} },  // top-right
+        { {-1.0f, -1.0f}, {0.0f, 1.0f} },  // bottom-left
+        { { 1.0f, -1.0f}, {1.0f, 1.0f} },  // bottom-right
     };
 
-    _vertexBuffer = [_device newBufferWithBytes:triangleVertices
-                                         length:sizeof(triangleVertices)
-                                        options:MTLResourceStorageModeShared];
+    _quadVertexBuffer = [_device newBufferWithBytes:quadVertices
+                                             length:sizeof(quadVertices)
+                                            options:MTLResourceStorageModeShared];
+}
 
-    id<MTLLibrary>  lib  = [_device newDefaultLibrary];
-    NSError        *err  = nil;
 
-    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-    desc.label                              = @"Triangle Pipeline";
-    desc.vertexFunction                     = [lib newFunctionWithName:@"vertexShader"];
-    desc.fragmentFunction                   = [lib newFunctionWithName:@"fragmentShader"];
-    desc.colorAttachments[0].pixelFormat    = mtkView.colorPixelFormat;
+// ── Sampler ───────────────────────────────────────────────────────────────────
 
-    _pipelineState = [_device newRenderPipelineStateWithDescriptor:desc error:&err];
-    if (!_pipelineState) { NSLog(@"Triangle PSO error: %@", err); }
+- (void)_buildSamplerState
+{
+    MTLSamplerDescriptor *desc  = [[MTLSamplerDescriptor alloc] init];
+    desc.minFilter              = MTLSamplerMinMagFilterLinear;
+    desc.magFilter              = MTLSamplerMinMagFilterLinear;
+    desc.sAddressMode           = MTLSamplerAddressModeClampToEdge;
+    desc.tAddressMode           = MTLSamplerAddressModeClampToEdge;
+    _samplerState               = [_device newSamplerStateWithDescriptor:desc];
 }
 
 
@@ -71,35 +80,13 @@
 
 - (void)_buildBackgroundPipelineWithView:(MTKView *)mtkView
 {
-    // Full-screen quad as a triangle strip (4 vertices, 2 triangles).
-    //
-    // Triangle strip winding:  v0─v1
-    //                           │╲  │
-    //                          v2─v3
-    //
-    // Strip order: v0, v1, v2 → triangle 1
-    //              v1, v2, v3 → triangle 2  (Metal re-uses last 2 vertices)
-    //
-    // NDC position     UV
-    static const AAPLTexturedVertex quadVertices[] =
-    {
-        { {-1.0f,  1.0f},  {0.0f, 0.0f} },   // v0  top-left
-        { { 1.0f,  1.0f},  {1.0f, 0.0f} },   // v1  top-right
-        { {-1.0f, -1.0f},  {0.0f, 1.0f} },   // v2  bottom-left
-        { { 1.0f, -1.0f},  {1.0f, 1.0f} },   // v3  bottom-right
-    };
+    id<MTLLibrary> lib = [_device newDefaultLibrary];
+    NSError       *err = nil;
 
-    _quadVertexBuffer = [_device newBufferWithBytes:quadVertices
-                                             length:sizeof(quadVertices)
-                                            options:MTLResourceStorageModeShared];
-
-    id<MTLLibrary>  lib = [_device newDefaultLibrary];
-    NSError        *err = nil;
-
-    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-    desc.label              = @"Background Pipeline";
-    desc.vertexFunction     = [lib newFunctionWithName:@"backgroundVertex"];
-    desc.fragmentFunction   = [lib newFunctionWithName:@"backgroundFragment"];
+    MTLRenderPipelineDescriptor *desc   = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.label                          = @"Background Pipeline";
+    desc.vertexFunction                 = [lib newFunctionWithName:@"backgroundVertex"];
+    desc.fragmentFunction               = [lib newFunctionWithName:@"backgroundFragment"];
     desc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat;
 
     _backgroundPipelineState = [_device newRenderPipelineStateWithDescriptor:desc
@@ -108,75 +95,72 @@
 }
 
 
-// ── Sampler state ─────────────────────────────────────────────────────────────
-//
-// MTLSamplerState is the Metal equivalent of:
-//   OpenGL:  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR) etc.
-//   Vulkan:  VkSamplerCreateInfo → vkCreateSampler
-//
-// Created once, reused every frame.
+// ── Liquid glass pipeline ─────────────────────────────────────────────────────
 
-- (void)_buildSamplerState
+- (void)_buildGlassPipelineWithView:(MTKView *)mtkView
 {
-    MTLSamplerDescriptor *desc = [[MTLSamplerDescriptor alloc] init];
+    id<MTLLibrary> lib = [_device newDefaultLibrary];
+    NSError       *err = nil;
 
-    // Linear filtering: smooth interpolation between texels.
-    // Use MTLSamplerMinMagFilterNearest for a pixelated / retro look.
-    desc.minFilter = MTLSamplerMinMagFilterLinear;
-    desc.magFilter = MTLSamplerMinMagFilterLinear;
+    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.label            = @"Liquid Glass Pipeline";
+    desc.vertexFunction   = [lib newFunctionWithName:@"glassVertex"];
+    desc.fragmentFunction = [lib newFunctionWithName:@"glassFragment"];
 
-    // ClampToEdge: pixels outside [0,1] UV get the edge colour.
-    // Equivalent to GL_CLAMP_TO_EDGE / VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE.
-    desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
-    desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+    // Alpha blending: glass composites over the background using its alpha channel.
+    MTLRenderPipelineColorAttachmentDescriptor *att = desc.colorAttachments[0];
+    att.pixelFormat                 = mtkView.colorPixelFormat;
+    att.blendingEnabled             = YES;
+    att.sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
+    att.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+    att.sourceAlphaBlendFactor      = MTLBlendFactorOne;
+    att.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
 
-    _samplerState = [_device newSamplerStateWithDescriptor:desc];
+    _glassPipelineState = [_device newRenderPipelineStateWithDescriptor:desc error:&err];
+    if (!_glassPipelineState) { NSLog(@"Glass PSO error: %@", err); }
 }
 
 
-// ── Public: load image from file ──────────────────────────────────────────────
+// ── Default 1×1 white texture ─────────────────────────────────────────────────
+// Used when no background image has been loaded yet.
+// Ensures the glass effect is always visible (renders as frosted white glass).
+
+- (void)_buildDefaultTexture
+{
+    MTLTextureDescriptor *desc =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                           width:1
+                                                          height:1
+                                                       mipmapped:NO];
+    _defaultTexture = [_device newTextureWithDescriptor:desc];
+
+    uint8_t white[4] = {255, 255, 255, 255};
+    uint8_t clr[4] = {0x1f, 0x1e, 0x33, 0xff};
+    [_defaultTexture replaceRegion:MTLRegionMake2D(0, 0, 1, 1)
+                       mipmapLevel:0
+                         withBytes:white
+                       bytesPerRow:4];
+}
+
+
+// ── Public: load background image ────────────────────────────────────────────
 
 - (void)loadBackgroundFromURL:(nonnull NSURL *)url
 {
-    // MTKTextureLoader is the high-level path for loading images into MTLTexture.
-    // It handles PNG, JPEG, HEIC, TIFF, and any format NSImage/CGImage can decode.
-    // The low-level path (manual CGImage decode + MTLTexture blit) is only needed
-    // when you need fine-grained control over formats or mip generation.
     MTKTextureLoader *loader = [[MTKTextureLoader alloc] initWithDevice:_device];
-
     NSDictionary *options = @{
-        // Generate no mipmaps — background is drawn at full screen size so
-        // minification mipmaps are wasted memory here.
-        MTKTextureLoaderOptionGenerateMipmaps : @(NO),
-
-        // SRGB = NO: load raw pixel values, no gamma correction applied by the
-        // loader.  Set to YES if you want the loader to tag the texture as sRGB
-        // so the GPU converts to linear on reads (correct for colour-managed apps).
-        MTKTextureLoaderOptionSRGB : @(NO),
-
-        // TextureUsage: ShaderRead is sufficient — we only sample, never write.
-        MTKTextureLoaderOptionTextureUsage :
-            @(MTLTextureUsageShaderRead),
-
-        // StorageMode: Private places the texture in GPU-only memory (fastest
-        // read).  The loader handles the CPU→GPU upload internally via a blit.
-        // Equivalent to a Vulkan DEVICE_LOCAL image after a staging upload.
-        MTKTextureLoaderOptionTextureStorageMode :
-            @(MTLStorageModePrivate),
+        MTKTextureLoaderOptionGenerateMipmaps    : @(NO),
+        MTKTextureLoaderOptionSRGB               : @(NO),
+        MTKTextureLoaderOptionTextureUsage       : @(MTLTextureUsageShaderRead),
+        MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate),
     };
 
     NSError *error = nil;
     id<MTLTexture> tex = [loader newTextureWithContentsOfURL:url
                                                      options:options
                                                        error:&error];
-    if (tex)
-    {
-        _backgroundTexture = tex;
-    }
-    else
-    {
-        NSLog(@"Failed to load background texture: %@", error);
-    }
+    if (tex)  { _backgroundTexture = tex; }
+    else      { NSLog(@"Texture load failed: %@", error); }
 }
 
 
@@ -190,49 +174,48 @@
     id<MTLCommandBuffer>        cmd     = [_commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:rpd];
 
-    // ── Draw background (only when a texture has been loaded) ─────────────────
-    //
-    // Draw order matters: background first, then triangle on top.
-    // There is no depth test here — we rely on painter's algorithm (draw order).
+    // ── Pass 1: background ────────────────────────────────────────────────────
     if (_backgroundTexture != nil)
     {
         [encoder setRenderPipelineState:_backgroundPipelineState];
-
-        // Vertex buffer — full-screen quad
-        [encoder setVertexBuffer:_quadVertexBuffer
-                          offset:0
+        [encoder setVertexBuffer:_quadVertexBuffer offset:0
                          atIndex:AAPLBgVertexInputIndexVertices];
-
-        // Texture — bound to slot 0, matches [[texture(AAPLBgTextureIndexBackground)]]
         [encoder setFragmentTexture:_backgroundTexture
                             atIndex:AAPLBgTextureIndexBackground];
-
-        // Sampler — bound to slot 0, matches [[sampler(0)]]
-        [encoder setFragmentSamplerState:_samplerState
-                                 atIndex:0];
-
-        // Triangle strip: 4 vertices → 2 triangles → full-screen quad
+        [encoder setFragmentSamplerState:_samplerState atIndex:0];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                    vertexStart:0
-                    vertexCount:4];
+                    vertexStart:0 vertexCount:4];
     }
 
-    // ── Draw coloured triangle (on top of background) ─────────────────────────
-    [encoder setRenderPipelineState:_pipelineState];
-    [encoder setVertexBuffer:_vertexBuffer
-                      offset:0
-                     atIndex:AAPLVertexInputIndexVertices];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
-                vertexStart:0
-                vertexCount:3];
+    // ── Pass 2: liquid glass ──────────────────────────────────────────────────
+    // Use the real background texture if loaded; fall back to 1×1 white.
+    id<MTLTexture> glassSource = _backgroundTexture ?: _defaultTexture;
+
+    [encoder setRenderPipelineState:_glassPipelineState];
+    [encoder setVertexBuffer:_quadVertexBuffer offset:0
+                     atIndex:AAPLBgVertexInputIndexVertices];
+    [encoder setFragmentTexture:glassSource atIndex:AAPLBgTextureIndexBackground];
+    [encoder setFragmentSamplerState:_samplerState atIndex:0];
+
+    // Pass viewport size as an inline constant (Vulkan equivalent: push constant).
+    // The glass fragment shader uses this to convert pixel coordinates to NDC
+    // and to correct for the window aspect ratio.
+    [encoder setFragmentBytes:&_viewportSize
+                       length:sizeof(_viewportSize)
+                      atIndex:0];
+
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0 vertexCount:4];
 
     [encoder endEncoding];
-
     [cmd presentDrawable:view.currentDrawable];
     [cmd commit];
 }
 
 
-- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size {}
+- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size
+{
+    _viewportSize = simd_make_float2((float)size.width, (float)size.height);
+}
 
 @end
