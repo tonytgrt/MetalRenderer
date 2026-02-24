@@ -1,129 +1,71 @@
-# Using Metal to Draw a View's Contents
+# Metal Rendering Playground
 
-Create a MetalKit view and a render pass to draw the view's contents.
+A macOS/iOS/tvOS learning project built on top of Apple's *"Using Metal to Draw a View's Contents"* sample. The original sample draws a colored background; this repo extends it step by step into a liquid-glass compositor with a two-pass Gaussian blur.
 
-## Overview
+![1771906515428](image/README/1771906515428.png)
 
-In this sample, you'll learn the basics of rendering graphics content with Metal. 
-You'll use the MetalKit framework to create a view that uses Metal to draw the contents of the view.  Then, you'll encode commands for a render pass that erases the view to a background color.
+## What it renders
 
-- Note: MetalKit automates windowing system tasks, loads textures, and handles 3D model data. See [MetalKit][MetalKit] for more information.
+| Layer        | File                   | Description                                                                                                                |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Background   | `Background.metal`   | Full-screen textured quad — displays an image loaded at runtime                                                           |
+| Liquid glass | `LiquidGlass.metal`  | SDF rounded rectangle with convex lens normals, refraction, Fresnel, rim highlight, and frosted interior                   |
+| Frosting     | `GaussianBlur.metal` | Two-pass separable Gaussian blur (horizontal → vertical) baked into an off-screen texture and sampled by the glass shader |
 
-## Prepare a MetalKit View to Draw
+The triangle (`Triangle.metal`) from the original Apple sample is still present as a reference.
 
-MetalKit provides a class called [`MTKView`][MTKView], which is a subclass of [`NSView`][NSView] (in macOS) or [`UIView`][UIView] (in iOS and tvOS).
-`MTKView` handles many of the details related to getting the content you draw with Metal onto the screen. 
+## Project layout
 
-An `MTKView` needs a reference to a Metal device object in order to create resources internally, so your first step is to set the view's  [`device`](https://developer.apple.com/documentation/metalkit/mtkview/1536011-device) property to an existing [`MTLDevice`][MTLDevice].
-
-``` objective-c
-_view.device = MTLCreateSystemDefaultDevice();
+```
+.
+├── Application/
+│   ├── AAPLViewController.mm   # MTKView setup; macOS "Background" menu bar item
+│   └── AAPLAppDelegate.mm
+├── Renderer/
+│   ├── AAPLRenderer.mm         # Command encoding: blur passes → background → glass
+│   ├── AAPLShaderTypes.h       # Shared C/Metal structs and buffer/texture index enums
+│   ├── Background.metal        # backgroundVertex / backgroundFragment
+│   ├── GaussianBlur.metal      # blurVertex / gaussianBlurFragment
+│   ├── LiquidGlass.metal       # glassVertex / glassFragment
+│   └── Triangle.metal          # vertexShader / fragmentShader (original sample)
+├── Guides/
+│   ├── triangle.md             # How to draw a colored triangle
+│   ├── background.md           # How to load an image and display it as background
+│   ├── Liquid_Glass.md         # How the liquid glass effect works end-to-end
+│   ├── Blur.md                 # Two-pass Gaussian blur implementation guide
+│   └── API.md                  # Metal API quick reference
+└── MetalKitAndRenderingSetup.xcodeproj
 ```
 
-Other properties on `MTKView` allow you to control its behavior. To erase the contents of the view to a solid background color, you set its [`clearColor`](https://developer.apple.com/documentation/metalkit/mtkview/1536036-clearcolor) property. You create the color using the [`MTLClearColorMake`](https://developer.apple.com/documentation/metal/mtlclearcolormake(_:_:_:_:)) function, specifying the red, green, blue, and alpha values.
+## Features
 
-``` objective-c
-_view.clearColor = MTLClearColorMake(0.0, 0.5, 1.0, 1.0);
-```
+- **Liquid glass effect** — SDF-based rounded rectangle, convex lens height field, finite-difference surface normals, `refract()` UV distortion, Schlick Fresnel, rim highlight, edge glow, centre caustic.
+- **Two-pass Gaussian blur** — separable H+V passes into `MTLStorageModePrivate` off-screen textures. Re-blurs only when the background image changes (`_blurDirty` flag), not every frame. Default σ = 20 (Dock-like frosting).
+- **Runtime background loading** — macOS menu bar item (`Background › Add Background…`) opens an `NSOpenPanel`; the chosen image is uploaded via `MTKTextureLoader` and immediately composited under the glass.
+- **Cross-platform** — builds for macOS, iOS, and tvOS simulator (conditional compilation via `TARGET_OS_OSX` / `TARGET_OS_IOS`).
+- **Objective-C++** — all `.mm` files mix Objective-C Metal APIs with C++ where convenient.
 
-Because you won't be drawing animated content in this sample, configure the view so that it only draws when the contents need to be updated, such as when the view changes shape:
+## Building
 
-``` objective-c
-_view.enableSetNeedsDisplay = YES;
-```
+Open `MetalKitAndRenderingSetup.xcodeproj` in Xcode 15+ and build the scheme for your target (Mac, iPhone Simulator, or Apple TV Simulator). No external dependencies.
 
+## Guides
 
-## Delegate Drawing Responsibilities
+The `Guides/` directory contains step-by-step tutorials written for developers with an OpenGL/Vulkan background:
 
-`MTKView` relies on your app to issue commands to Metal to produce visual content.
-`MTKView` uses the delegate pattern to inform your app when it should draw.
-To receive delegate callbacks, set the view's `delegate` property to an object that conforms to the [`MTKViewDelegate`][MTKViewDelegate] protocol.
+- [triangle.md](Guides/triangle.md) — vertex buffers, pipeline state objects, and the Metal draw loop.
+- [background.md](Guides/background.md) — `MTKTextureLoader`, samplers, textured quads, and `NSOpenPanel`.
+- [Liquid_Glass.md](Guides/Liquid_Glass.md) — SDFs, height fields, normals, refraction, Fresnel, and alpha blending.
+- [Blur.md](Guides/Blur.md) — separable Gaussian blur, off-screen render targets, and the `_blurDirty` pattern.
 
-``` objective-c
-_view.delegate = _renderer;
-```
+## Tuning the glass
 
-The delegate implements two methods:
+All visual parameters live in `LiquidGlass.metal` and `AAPLRenderer.mm`:
 
-- The view calls the [`mtkView:drawableSizeWillChange:`](https://developer.apple.com/documentation/metalkit/mtkviewdelegate/1536015-mtkview) method whenever the size of the contents changes.
-This happens when the window containing the view is resized, or when the device orientation changes (on iOS).
-This allows your app to adapt the resolution at which it renders to the size of the view.
-
-- The view calls the [`drawInMTKView:`](https://developer.apple.com/documentation/metalkit/mtkviewdelegate/1535942-drawinmtkview) method whenever it's time to update the view's contents.
-In this method, you create a command buffer, encode commands that tell the GPU what to draw and when to display it onscreen, and enqueue that command buffer to be executed by the GPU. This is sometimes referred to as drawing a frame. You can think of a frame as all of the work that goes into producing a single image that gets displayed on the screen. In an interactive app, like a game, you might draw many frames per second.
-
-In this sample, a class called `AAPLRenderer` implements the delegate methods and takes on the responsibility of drawing.
-The view controller creates an instance of this class and sets it as the view's delegate.
-
-## Create a Render Pass Descriptor
-
-When you draw, the GPU stores the results into *textures*, which are blocks of memory that contain image data and are accessible to the GPU. In this sample, the `MTKView` creates all of the textures you need to draw into the view. It creates multiple textures so that it can display the contents of one texture while you render into another.
-
-To draw, you create a *render pass*, which is a sequence of rendering commands that draw into a set of textures. When used in a render pass, textures are also called *render targets*. To create a render pass, you need a render pass descriptor, an instance of [`MTLRenderPassDescriptor`][MTLRenderPassDescriptor]. In this sample, rather than configuring your own render pass descriptor, ask the MetalKit view to create one for you.
-
-``` objective-c
-MTLRenderPassDescriptor *renderPassDescriptor = view.currentRenderPassDescriptor;
-if (renderPassDescriptor == nil)
-{
-    return;
-}
-```
-
-A render pass descriptor describes the set of render targets, and how they should be processed at the start and end of the render pass. Render passes also define some other aspects of rendering that are not part of this sample. The view returns a render pass descriptor with a single color attachment that points to one of the view's textures, and otherwise configures the render pass based on the view's properties. By default, this means that at the start of the render pass, the render target is erased to a solid color that matches the view's `clearColor` property, and at the end of the render pass, all changes are stored back to the texture.
-
-Because a view's render pass descriptor might be `nil`, you should test to make sure the render pass descriptor object is non-`nil` before creating the render pass.
-
-
-## Create a Render Pass
-
-You create the render pass by encoding it into the command buffer using a  [`MTLRenderCommandEncoder`][MTLRenderCommandEncoder] object. Call the command buffer's [`renderCommandEncoderWithDescriptor:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/makerendercommandencoder(descriptor:)) method and pass in the render pass descriptor.
-
-``` objective-c
-id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-```
-
-In this sample, you don't encode any drawing commands, so the only thing the render pass does is erase the texture. Call the encoder's `endEncoding` method to indicate that the pass is complete.
-
-``` objective-c
-[commandEncoder endEncoding];
-```
-
-## Present a Drawable to the Screen
-
-Drawing to a texture doesn't automatically display the new contents onscreen. In fact, only some textures can be presented onscreen. In Metal, textures that can be displayed onscreen are managed by *drawable objects*, and to display the content, you present the drawable.
-
-`MTKView` automatically creates drawable objects to manage its textures. Read the [`currentDrawable`](https://developer.apple.com/documentation/metalkit/mtkview/1535971-currentdrawable) property to get the drawable that owns the texture that is the render pass's target. The view returns a [`CAMetalDrawable`][CAMetalDrawable] object, an object connected to Core Animation.
-
-``` objective-c
-id<MTLDrawable> drawable = view.currentDrawable;
-```
-
-Call the [`presentDrawable:`](https://developer.apple.com/documentation/metal/mtlcommandbuffer/present(_:)-3fi7o) method on the command buffer, passing in the drawable.
-
-``` objective-c
-[commandBuffer presentDrawable:drawable];
-```
-
-This method tells Metal that when the command buffer is scheduled for execution, Metal should coordinate with Core Animation to display the texture after rendering completes. When Core Animation presents the texture, it becomes the view's new contents. In this sample, this means that the erased texture becomes the new background for the view. The change happens alongside any other visual updates that Core Animation makes for onscreen user interface elements. 
-
-
-## Commit the Command Buffer
-
-Now that you've issued all the commands for the frame, commit the command buffer.
-
-``` objective-c
-[commandBuffer commit];
-```
-
-
-[MTLDevice]: https://developer.apple.com/documentation/metal/mtldevice
-[MTLRenderPassDescriptor]: https://developer.apple.com/documentation/metal/mtlrenderpassdescriptor
-[MTLRenderCommandEncoder]: https://developer.apple.com/documentation/metal/mtlrendercommandencoder
-[MetalKit]: https://developer.apple.com/documentation/metalkit
-[MTKView]: https://developer.apple.com/documentation/metalkit/mtkview
-[MTKViewDelegate]: https://developer.apple.com/documentation/metalkit/mtkviewdelegate
-[HelloTriangle]: https://developer.apple.com/documentation/metal
-[MetalComputeBasic]: https://developer.apple.com/documentation/metal
-[NSView]: https://developer.apple.com/documentation/appkit/nsview
-[UIView]: https://developer.apple.com/documentation/uikit/uiview
-[CAMetalDrawable]: https://developer.apple.com/documentation/quartzcore/cametaldrawable
+| Parameter            | Location              | Default                       | Effect                                        |
+| -------------------- | --------------------- | ----------------------------- | --------------------------------------------- |
+| `boxHalf`          | `LiquidGlass.metal` | `(0.65, 0.42)`              | Glass panel size in aspect-corrected units    |
+| `cornerR`          | `LiquidGlass.metal` | `0.06`                      | Corner radius (smaller = sharper rect)        |
+| `refractStr`       | `LiquidGlass.metal` | `0.03`                      | Strength of edge refraction distortion        |
+| `frostBlend` range | `LiquidGlass.metal` | `smoothstep(0.35, 0.70, t)` | Where frosting fades in from the edge         |
+| `_blurSigma`       | `AAPLRenderer.mm`   | `20.0`                      | Gaussian σ in pixels (higher = more frosted) |

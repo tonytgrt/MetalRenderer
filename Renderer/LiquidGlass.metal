@@ -60,8 +60,8 @@ glassFragment(GlassRasterizerData   in        [[ stage_in ]],
     // boxHalf and cornerR are in aspect-corrected units (1 = view height).
     // 0.38 half-extent means the panel spans 76% of the view height.
     // cornerR = 0.12 gives the rounded squircle-like corner of iOS icons.
-    float2 boxHalf  = float2(0.38, 0.38);
-    float  cornerR  = 0.12;
+    float2 boxHalf  = float2(0.65, 0.42);   // wide panel: ~91% of screen width, 84% of height
+    float  cornerR  = 0.06;                 // subtle round-rect (not iOS-icon circular)
     float  sdf      = sdRoundedBox(p, boxHalf, cornerR);
 
     // ── 3. AA boundary mask ───────────────────────────────────────────────────
